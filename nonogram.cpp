@@ -1,12 +1,41 @@
 #include <iostream>
+#include <memory>
+#include <unordered_map>
 #include <vector>
 
-enum state { EMPTY, SOLID, CROSSED };
-enum direction { ROW, COLUMN };
+enum class CellState { EMPTY, SOLID, CROSSED };
+
+enum class Direction { EMPTY, ROW, COLUMN };
 struct LineName {
-  direction dir;
+  Direction dir;
   int index;
+
+  // comparison needed for use as key
+  bool operator==(const LineName &o) const {
+    return dir == o.dir && index == o.index;
+  }
+
+  static LineName Row(int i) {
+    LineName n{.dir = Direction::ROW, .index = i};
+    return n;
+  }
+
+  static LineName Column(int i) {
+    LineName n{.dir = Direction::COLUMN, .index = i};
+    return n;
+  }
 };
+
+// implement hash for LineName to use it as map key
+namespace std {
+template <>
+struct hash<LineName> {
+  std::size_t operator()(const LineName &n) const {
+    return std::hash<Direction>()(n.dir) ^ std::hash<int>()(n.index);
+  }
+};
+}  // namespace std
+
 struct LineStats {
   int wiggleRoom;
 };
@@ -15,7 +44,7 @@ class Solver;
 
 class Slice {
   Solver &solver_;
-  const std::vector<state> &g_;
+  const std::vector<CellState> &g_;
   int offset0_;
   int step_;
   int length_;
@@ -24,8 +53,8 @@ class Slice {
   Slice(Solver &solver, int offset0, int step, int length);
   Slice(Solver &solver, LineName name);
 
-  state get(int i) const { return g_[offset0_ + step_ * i]; };
-  void set(int i, state s) const;
+  CellState get(int i) const { return g_[offset0_ + step_ * i]; };
+  void set(int i, CellState s) const;
 
   int length() const { return length_; };
 
@@ -40,7 +69,7 @@ class Slice {
   int indexOfNextSolid(int start, int bound) const;
 
   // setSegment between i and j (exclusive) to state val.
-  int setSegment(int i, int j, state val) const;
+  int setSegment(int i, int j, CellState val) const;
 
   Slice reverse() const;
 };
@@ -82,7 +111,12 @@ class Line {
     std::vector<int> ub;
     std::vector<bool> done;
 
-    State(const Line &l);
+    explicit State(const Line &l);
+    State() = default;
+    State(const State &) = default;
+    State(State &&) = default;
+    State &operator=(const State &) = default;
+    State &operator=(State &&) = default;
   };
   State getState() const;
   void setState(State &&s);
@@ -92,12 +126,56 @@ class Solver {
  public:
   const int width_;
   const int height_;
-  std::vector<state> g_;
+  std::vector<CellState> g_;
+  bool failed_;
+  LineName lineName_;  // the line we are working on
 
-  Solver(std::vector<std::vector<int>> rows,
-         std::vector<std::vector<int>> cols);
+  struct Guessed {
+    int x;
+    int y;
+    CellState val;
 
-  void set(int x, int y, state s);
+    static Guessed Empty() {
+      Guessed g{.x = -1, .y = -1, .val = CellState::EMPTY};
+      return g;
+    };
+    bool isEmpty() { return x == -1 && y == -1 && val == CellState::EMPTY; };
+  } guessed_;
+
+  struct State {
+    std::vector<CellState> g;
+    std::unordered_map<LineName, Line::State> lines;
+    Guessed guessed;
+  };
+
+  struct Stats {
+    int lineCount;
+    int wrongGuesses;
+    int maxDepth;
+  } stats_;
+
+ private:
+  std::unordered_map<LineName, std::unique_ptr<Line>> lines_;
+  std::vector<LineName> dirty_;
+  std::vector<State> states_;
+
+ public:
+  Solver(std::vector<std::vector<int>> &&rows,
+         std::vector<std::vector<int>> &&cols);
+
+  CellState get(int x, int y) const { return g_[x + y * width_]; };
+  void set(int x, int y, CellState s);
+
+  LineName getDirty();
+  void markDirty(LineName n);
+
+  void pushState();
+  void popState();
+  bool infer();
+  Guessed guess();
+  bool solve();
+
+  void printGrid();
 };
 
 // Slice implementation
@@ -110,7 +188,7 @@ Slice::Slice(Solver &solver, int offset0, int step, int length)
       length_(length){};
 
 Slice::Slice(Solver &solver, LineName name) : solver_(solver), g_(solver.g_) {
-  if (name.dir == ROW) {
+  if (name.dir == Direction::ROW) {
     offset0_ = solver.width_ * name.index;
     step_ = 1;
     length_ = solver.width_;
@@ -121,7 +199,7 @@ Slice::Slice(Solver &solver, LineName name) : solver_(solver), g_(solver.g_) {
   }
 }
 
-void Slice::set(int i, state s) const {
+void Slice::set(int i, CellState s) const {
   int o = offset0_ + step_ * i;
   int x = o % solver_.width_;
   int y = (o - x) / solver_.width_;
@@ -131,7 +209,7 @@ void Slice::set(int i, state s) const {
 int Slice::findHoleStartingAt(int start, int length) const {
   int found = 0;
   for (int i = start; i < length_; i++) {
-    if (get(i) == CROSSED) {
+    if (get(i) == CellState::CROSSED) {
       found = 0;
     } else {
       found += 1;
@@ -144,7 +222,7 @@ int Slice::findHoleStartingAt(int start, int length) const {
 };
 
 int Slice::stripLength(int i) const {
-  state val = get(i);
+  CellState val = get(i);
   int n = 0;
   for (; i < length_; i++) {
     if (get(i) == val) {
@@ -158,7 +236,7 @@ int Slice::stripLength(int i) const {
 
 int Slice::indexOfNextSolid(int start, int bound) const {
   for (int i = start; i < bound; i++) {
-    if (get(i) == SOLID) {
+    if (get(i) == CellState::SOLID) {
       return i;
     }
   }
@@ -167,7 +245,7 @@ int Slice::indexOfNextSolid(int start, int bound) const {
 
 // setSegment between i and j (exclusive) to state val. Return number
 // of cells changed.
-int Slice::setSegment(int i, int j, state val) const {
+int Slice::setSegment(int i, int j, CellState val) const {
   int changed = 0;
   for (int n = i; n < j; n++) {
     if (get(n) != val) {
@@ -254,8 +332,8 @@ bool Line::fitLeftMost(Slice slice, const std::vector<int> &len,
     // that case.
     bool skippedSolid = false;
     while (hole + len[i] < slice.length() &&
-           slice.get(hole + len[i]) == SOLID) {
-      skippedSolid = skippedSolid || slice.get(hole) == SOLID;
+           slice.get(hole + len[i]) == CellState::SOLID) {
+      skippedSolid = skippedSolid || slice.get(hole) == CellState::SOLID;
       hole++;
     }
     lb[i] = hole;
@@ -283,7 +361,7 @@ bool Line::inferSegments() {
     }
 
     if (l > prevU + 1) {
-      slice_.setSegment(prevU + 1, l, CROSSED);
+      slice_.setSegment(prevU + 1, l, CellState::CROSSED);
     }
 
     if (done(i)) {
@@ -291,7 +369,7 @@ bool Line::inferSegments() {
     }
 
     if (u - len(i) + 1 <= l + len(i) - 1) {
-      slice_.setSegment(u - len(i) + 1, l + len(i), SOLID);
+      slice_.setSegment(u - len(i) + 1, l + len(i), CellState::SOLID);
     }
 
     if (u - l + 1 == len(i)) {
@@ -299,7 +377,8 @@ bool Line::inferSegments() {
     }
   }
   if (ub(numSegments() - 1) + 1 < slice_.length()) {
-    slice_.setSegment(ub(numSegments() - 1) + 1, slice_.length(), CROSSED);
+    slice_.setSegment(ub(numSegments() - 1) + 1, slice_.length(),
+                      CellState::CROSSED);
   }
   return true;
 }
@@ -342,8 +421,9 @@ bool Line::inferStrips() {
       continue;
     }
 
-    if (slice_.get(i) == EMPTY) {
-      if (slice_.get(i - 1) != CROSSED || slice_.get(i + stripLen) != CROSSED) {
+    if (slice_.get(i) == CellState::EMPTY) {
+      if (slice_.get(i - 1) != CellState::CROSSED ||
+          slice_.get(i + stripLen) != CellState::CROSSED) {
         continue;
       }
       // find holes that's smaller than all potential
@@ -363,8 +443,8 @@ bool Line::inferStrips() {
         continue;
       }
 
-      slice_.setSegment(i, i + stripLen, CROSSED);
-    } else if (slice_.get(i) == SOLID) {
+      slice_.setSegment(i, i + stripLen, CellState::CROSSED);
+    } else if (slice_.get(i) == CellState::SOLID) {
       auto seg = collidingSegments(i, i + stripLen - 1);
       if (seg.first == seg.second) {
         continue;
@@ -384,37 +464,38 @@ bool Line::inferStrips() {
       }
 
       for (int j = i + stripLen; j < i + minLen && j < slice_.length(); j++) {
-        state s = slice_.get(j);
-        if (s == SOLID) {
+        CellState s = slice_.get(j);
+        if (s == CellState::SOLID) {
           break;
         }
-        if (s == EMPTY) {
+        if (s == CellState::EMPTY) {
           continue;
         }
         // we have strip "SSS  X" and can prepend some S
-        if (slice_.setSegment(j - minLen, i, SOLID) > 0) {
+        if (slice_.setSegment(j - minLen, i, CellState::SOLID) > 0) {
           stripLen += i - (j - minLen);
           i = j - minLen;
         }
         break;
       }
       for (int j = i - 1; j >= i + stripLen - minLen && j >= 0; j--) {
-        state s = slice_.get(j);
-        if (s == SOLID) {
+        CellState s = slice_.get(j);
+        if (s == CellState::SOLID) {
           break;
         }
-        if (s == EMPTY) {
+        if (s == CellState::EMPTY) {
           continue;
         }
         // we have strip "X  SSS" and can append some S
-        if (slice_.setSegment(i + stripLen, j + minLen + 1, SOLID) > 0) {
+        if (slice_.setSegment(i + stripLen, j + minLen + 1, CellState::SOLID) >
+            0) {
           stripLen += j + minLen + 1 - (i + stripLen);
         }
         break;
       }
       if (maxLen == stripLen) {
-        slice_.setSegment(i - 1, i, CROSSED);
-        slice_.setSegment(i + stripLen, i + stripLen + 1, CROSSED);
+        slice_.setSegment(i - 1, i, CellState::CROSSED);
+        slice_.setSegment(i + stripLen, i + stripLen + 1, CellState::CROSSED);
       }
     }
   }
@@ -424,7 +505,7 @@ bool Line::inferStrips() {
 bool Line::infer() {
   // special case for no segments.
   if (numSegments() == 0) {
-    slice_.setSegment(0, slice_.length(), CROSSED);
+    slice_.setSegment(0, slice_.length(), CellState::CROSSED);
     return true;
   }
 
@@ -459,10 +540,206 @@ void Line::setState(Line::State &&s) {
 
 // Solver implementation
 
-Solver::Solver(std::vector<std::vector<int>> rows,
-               std::vector<std::vector<int>> cols)
-    : width_(cols.size()), height_(rows.size()) {}
+Solver::Solver(std::vector<std::vector<int>> &&rows,
+               std::vector<std::vector<int>> &&cols)
+    : width_(cols.size()), height_(rows.size()), g_(cols.size() * rows.size()) {
+  for (int i = 0; i < width_; i++) {
+    lines_[LineName::Column(i)] =
+        std::make_unique<Line>(*this, LineName::Column(i), std::move(cols[i]));
+    dirty_.push_back(LineName::Column(i));
+  }
+  for (int i = 0; i < height_; i++) {
+    lines_[LineName::Row(i)] =
+        std::make_unique<Line>(*this, LineName::Row(i), std::move(rows[i]));
+    dirty_.push_back(LineName::Row(i));
+  }
+}
 
-void Solver::set(int x, int y, state s){
+void Solver::set(int x, int y, CellState val) {
+  if (val == get(x, y)) {
+    return;
+  }
+  if (get(x, y) != CellState::EMPTY) {
+    failed_ = true;
+    return;
+  }
 
+  g_[x + y * width_] = val;
+  if (lineName_.dir != Direction::ROW) {
+    markDirty(LineName::Row(y));
+  }
+  if (lineName_.dir != Direction::COLUMN) {
+    markDirty(LineName::Column(x));
+  }
 };
+
+void Solver::markDirty(LineName n) {
+  auto f = std::find(dirty_.begin(), dirty_.end(), n);
+  if (f == dirty_.end()) {
+    dirty_.push_back(n);
+  }
+};
+
+LineName Solver::getDirty() {
+  std::sort(dirty_.begin(), dirty_.end(),
+            [this](LineName a, LineName b) -> bool {
+              int wa = this->lines_[a]->stats.wiggleRoom;
+              int wb = this->lines_[b]->stats.wiggleRoom;
+              return wa > wb;
+            });
+  auto n = dirty_.back();
+  dirty_.pop_back();
+  return n;
+};
+
+void Solver::pushState() {
+  Solver::State s;
+  s.g = g_;
+  s.guessed = guessed_;
+  for (auto &kv : lines_) {
+    s.lines[kv.first] = kv.second->getState();
+  }
+
+  states_.push_back(s);
+  if (stats_.maxDepth < states_.size()) {
+    stats_.maxDepth = states_.size();
+  }
+}
+
+void Solver::popState() {
+  Solver::State &s = states_.back();
+  g_ = std::move(s.g);
+  guessed_ = s.guessed;
+  for (auto &kv : lines_) {
+    kv.second->setState(std::move(s.lines[kv.first]));
+  }
+  dirty_.clear();
+  states_.pop_back();
+}
+
+// make inference on lines until all lines are checked.
+bool Solver::infer() {
+  while (dirty_.size() > 0) {
+    lineName_ = getDirty();
+    Line *line = lines_[lineName_].get();
+    if (!line->infer()) {
+      return false;
+    };
+    stats_.lineCount++;
+    lineName_.dir = Direction::EMPTY;
+    if (failed_) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// picks an unwritten cell and make a guess. Returs object like
+// {x,y,val}. Returns empty guess if everything has been filled.
+Solver::Guessed Solver::guess() {
+  auto r = Solver::Guessed::Empty();
+
+  double maxScore = -std::numeric_limits<double>::infinity();
+
+  for (int x = 0; x < width_; x++) {
+    for (int y = 0; y < height_; y++) {
+      if (get(x, y) != CellState::EMPTY) {
+        continue;
+      }
+
+      CellState val = CellState::SOLID;
+      double score = -lines_[LineName::Row(y)]->stats.wiggleRoom -
+                     lines_[LineName::Column(x)]->stats.wiggleRoom;
+      int minX = std::min(x, width_ - 1 - x);
+      int minY = std::min(y, height_ - 1 - y);
+      score -= minX * height_ / 10 + minY * width_ / 10;
+
+      if (minX == 0 || minY == 0) {
+        score += width_ / 5.0 + height_ / 5.0;
+      }
+
+      if (x > 0 && get(x - 1, y) == CellState::SOLID) {
+        score += 5;
+        val = CellState::CROSSED;
+      }
+      if (y > 0 && get(x, y - 1) == CellState::SOLID) {
+        score += 5;
+        val = CellState::CROSSED;
+      }
+      if (x < width_ - 1 && get(x + 1, y) == CellState::SOLID) {
+        score += 5;
+        val = CellState::CROSSED;
+      }
+      if (y < height_ - 1 && get(x, y + 1) == CellState::SOLID) {
+        score += 5;
+        val = CellState::CROSSED;
+      }
+
+      if (score > maxScore) {
+        r.x = x;
+        r.y = y;
+        r.val = val;
+        maxScore = score;
+      }
+    }
+  }
+  return r;
+}
+
+bool Solver::solve() {
+  while (true) {
+    if (!infer() || failed_) {
+      if (states_.size() == 0) {
+        return false;
+      }
+      failed_ = false;
+      popState();
+      set(guessed_.x, guessed_.y,
+          guessed_.val == CellState::SOLID ? CellState::CROSSED
+                                           : CellState::SOLID);
+      stats_.wrongGuesses++;
+      guessed_ = Solver::Guessed::Empty();
+    } else {
+      auto g = guess();
+      if (g.isEmpty()) {
+        // TODO: report stats
+        return true;
+      }
+      guessed_ = g;
+      pushState();
+      set(g.x, g.y, g.val);
+    }
+  }
+}
+
+void Solver::printGrid() {
+  for (int y = 0; y < height_; y++) {
+    for (int x = 0; x < width_; x++) {
+      switch (get(x, y)) {
+        case CellState::EMPTY:
+          std::cout << ' ';
+          break;
+        case CellState::SOLID:
+          std::cout << '#';
+          break;
+        case CellState::CROSSED:
+          std::cout << '.';
+          break;
+      }
+    }
+    std::cout << '\n';
+  }
+}
+
+// main
+int main(int argc, char *argv[]) {
+  std::vector<std::vector<int>> rows{{1, 1}, {1, 1},    {10},   {1, 2, 2},
+                                     {3, 1}, {1, 1, 1}, {3, 1}, {4, 2},
+                                     {10},   {1, 1}};
+  std::vector<std::vector<int>> cols{{7},    {1, 1, 4}, {1, 7}, {3, 2},
+                                     {1, 1}, {1, 1},    {2, 1}, {1, 1, 1},
+                                     {2, 3}, {7}};
+  Solver s(std::move(rows), std::move(cols));
+  s.solve();
+  s.printGrid();
+}
