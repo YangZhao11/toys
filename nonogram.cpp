@@ -76,7 +76,6 @@ class Slice {
 
 class Line {
  private:
-  Solver &solver_;
   const std::vector<int> len_;
   std::vector<int> lb_;
   std::vector<int> ub_;
@@ -130,13 +129,13 @@ class Solver {
   bool failed_;
   LineName lineName_;  // the line we are working on
 
-  struct Guessed {
+  struct Guess {
     int x;
     int y;
     CellState val;
 
-    static Guessed Empty() {
-      Guessed g{.x = -1, .y = -1, .val = CellState::EMPTY};
+    static Guess Empty() {
+      Guess g{.x = -1, .y = -1, .val = CellState::EMPTY};
       return g;
     };
     bool isEmpty() { return x == -1 && y == -1 && val == CellState::EMPTY; };
@@ -145,7 +144,7 @@ class Solver {
   struct State {
     std::vector<CellState> g;
     std::unordered_map<LineName, Line::State> lines;
-    Guessed guessed;
+    Guess guessed;
   };
 
   struct Stats {
@@ -172,7 +171,7 @@ class Solver {
   void pushState();
   void popState();
   bool infer();
-  Guessed guess();
+  Guess guess();
   bool solve();
 
   void printGrid();
@@ -262,13 +261,12 @@ Slice Slice::reverse() const {
 
 // Line implementation
 Line::Line(Solver &solver, LineName name, std::vector<int> &&len)
-    : solver_(solver),
-      name(name),
-      len_(len),
+    : len_(len),
       lb_(len.size()),
       ub_(len.size()),
       done_(len.size()),
-      slice_(solver, name) {
+      slice_(solver, name),
+      name(name) {
   int sum = 0;
   for (auto l : len) {
     sum += l;
@@ -636,8 +634,8 @@ bool Solver::infer() {
 
 // picks an unwritten cell and make a guess. Returs object like
 // {x,y,val}. Returns empty guess if everything has been filled.
-Solver::Guessed Solver::guess() {
-  auto r = Solver::Guessed::Empty();
+Solver::Guess Solver::guess() {
+  auto r = Solver::Guess::Empty();
 
   double maxScore = -std::numeric_limits<double>::infinity();
 
@@ -698,7 +696,7 @@ bool Solver::solve() {
           guessed_.val == CellState::SOLID ? CellState::CROSSED
                                            : CellState::SOLID);
       stats_.wrongGuesses++;
-      guessed_ = Solver::Guessed::Empty();
+      guessed_ = Solver::Guess::Empty();
     } else {
       auto g = guess();
       if (g.isEmpty()) {
