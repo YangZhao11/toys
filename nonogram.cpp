@@ -1,7 +1,9 @@
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <unordered_map>
 #include <vector>
+#include "json.hpp"
 
 enum class CellState { EMPTY, SOLID, CROSSED };
 
@@ -729,15 +731,49 @@ void Solver::printGrid() {
   }
 }
 
+// file IO
+struct PictureFile {
+  std::vector<std::vector<int>> rows;
+  std::vector<std::vector<int>> cols;
+};
+
+PictureFile readPictureFile(std::string filename) {
+  std::ifstream ifs(filename);
+  std::string content(std::istreambuf_iterator<char>{ifs},
+                      std::istreambuf_iterator<char>());
+
+  auto j = nlohmann::json::parse(content);
+  std::vector<std::string> rows = j["rows"];
+  std::vector<std::string> cols = j["cols"];
+
+  PictureFile p;
+  for (std::string &r : rows) {
+    std::istringstream iss(r);
+    std::vector<int> parsed(std::istream_iterator<int>{iss},
+                            std::istream_iterator<int>());
+    p.rows.push_back(std::move(parsed));
+  }
+  for (std::string &r : cols) {
+    std::istringstream iss(r);
+    std::vector<int> parsed(std::istream_iterator<int>{iss},
+                            std::istream_iterator<int>());
+    p.cols.push_back(std::move(parsed));
+  }
+  return p;
+};
+
 // main
 int main(int argc, char *argv[]) {
-  std::vector<std::vector<int>> rows{{1, 1}, {1, 1},    {10},   {1, 2, 2},
-                                     {3, 1}, {1, 1, 1}, {3, 1}, {4, 2},
-                                     {10},   {1, 1}};
-  std::vector<std::vector<int>> cols{{7},    {1, 1, 4}, {1, 7}, {3, 2},
-                                     {1, 1}, {1, 1},    {2, 1}, {1, 1, 1},
-                                     {2, 3}, {7}};
-  Solver s(std::move(rows), std::move(cols));
-  s.solve();
-  s.printGrid();
+  if (argc < 2) {
+    return 1;
+  }
+
+  auto p = readPictureFile(argv[1]);
+
+  Solver s(std::move(p.rows), std::move(p.cols));
+  if (s.solve()) {
+    s.printGrid();
+  } else {
+    std::cout << "failed to find solution";
+  }
 }

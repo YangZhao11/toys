@@ -1,2 +1,2 @@
 % : %.cpp
-	g++ $< -o $@ --std=c++14 -Wall
+	g++ $< -o $@ --std=c++17 -Wall
