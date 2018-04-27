@@ -386,7 +386,7 @@ bool Line::inferSegments() {
 // returns a segment index ranges (left inclusive, right exclusive)
 // that lb(i) <= start and ub(i) >= end.
 std::pair<int, int> Line::collidingSegments(int start, int end) {
-  int first, second;
+  int first = 0, second = 0;
   bool found = false;
   for (int i = 0; i < numSegments(); i++) {
     if (ub(i) < end) {
