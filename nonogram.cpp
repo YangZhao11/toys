@@ -1,7 +1,6 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
-#include <unordered_map>
 #include <vector>
 #include "json.hpp"
 
@@ -145,7 +144,7 @@ class Solver {
 
   struct State {
     std::vector<CellState> g;
-    std::unordered_map<LineName, Line::State> lines;
+    std::vector<Line::State> lines;
     Guess guessed;
   };
 
@@ -156,7 +155,7 @@ class Solver {
   } stats_;
 
  private:
-  std::unordered_map<LineName, std::unique_ptr<Line>> lines_;
+  std::vector<std::unique_ptr<Line>> lines_;
   std::vector<LineName> dirty_;
   std::vector<State> states_;
 
@@ -166,6 +165,10 @@ class Solver {
 
   CellState get(int x, int y) const { return g_[x + y * width_]; };
   void set(int x, int y, CellState s);
+  Line &getLine(LineName name) {
+    int i = name.dir == Direction::ROW ? name.index : name.index + height_;
+    return *(lines_[i].get());
+  };
 
   LineName getDirty();
   void markDirty(LineName n);
@@ -543,15 +546,15 @@ void Line::setState(Line::State &&s) {
 Solver::Solver(std::vector<std::vector<int>> &&rows,
                std::vector<std::vector<int>> &&cols)
     : width_(cols.size()), height_(rows.size()), g_(cols.size() * rows.size()) {
-  for (int i = 0; i < width_; i++) {
-    lines_[LineName::Column(i)] =
-        std::make_unique<Line>(*this, LineName::Column(i), std::move(cols[i]));
-    dirty_.push_back(LineName::Column(i));
-  }
   for (int i = 0; i < height_; i++) {
-    lines_[LineName::Row(i)] =
-        std::make_unique<Line>(*this, LineName::Row(i), std::move(rows[i]));
+    lines_.push_back(
+        std::make_unique<Line>(*this, LineName::Row(i), std::move(rows[i])));
     dirty_.push_back(LineName::Row(i));
+  }
+  for (int i = 0; i < width_; i++) {
+    lines_.push_back(
+        std::make_unique<Line>(*this, LineName::Column(i), std::move(cols[i])));
+    dirty_.push_back(LineName::Column(i));
   }
 }
 
@@ -583,8 +586,8 @@ void Solver::markDirty(LineName n) {
 LineName Solver::getDirty() {
   std::sort(dirty_.begin(), dirty_.end(),
             [this](LineName a, LineName b) -> bool {
-              int wa = this->lines_[a]->stats.wiggleRoom;
-              int wb = this->lines_[b]->stats.wiggleRoom;
+              int wa = this->getLine(a).stats.wiggleRoom;
+              int wb = this->getLine(b).stats.wiggleRoom;
               return wa > wb;
             });
   auto n = dirty_.back();
@@ -596,8 +599,8 @@ void Solver::pushState() {
   Solver::State s;
   s.g = g_;
   s.guessed = guessed_;
-  for (auto &kv : lines_) {
-    s.lines[kv.first] = kv.second->getState();
+  for (int i = 0; i < lines_.size(); i++) {
+    s.lines.push_back(lines_[i]->getState());
   }
 
   states_.push_back(s);
@@ -610,8 +613,8 @@ void Solver::popState() {
   Solver::State &s = states_.back();
   g_ = std::move(s.g);
   guessed_ = s.guessed;
-  for (auto &kv : lines_) {
-    kv.second->setState(std::move(s.lines[kv.first]));
+  for (int i = 0; i < lines_.size(); i++) {
+    lines_[i]->setState(std::move(s.lines[i]));
   }
   dirty_.clear();
   states_.pop_back();
@@ -621,8 +624,8 @@ void Solver::popState() {
 bool Solver::infer() {
   while (dirty_.size() > 0) {
     lineName_ = getDirty();
-    Line *line = lines_[lineName_].get();
-    if (!line->infer()) {
+    Line &line = getLine(lineName_);
+    if (!line.infer()) {
       return false;
     };
     stats_.lineCount++;
@@ -648,8 +651,8 @@ Solver::Guess Solver::guess() {
       }
 
       CellState val = CellState::SOLID;
-      double score = -lines_[LineName::Row(y)]->stats.wiggleRoom -
-                     lines_[LineName::Column(x)]->stats.wiggleRoom;
+      double score = -getLine(LineName::Row(y)).stats.wiggleRoom -
+                     getLine(LineName::Column(x)).stats.wiggleRoom;
       int minX = std::min(x, width_ - 1 - x);
       int minY = std::min(y, height_ - 1 - y);
       score -= minX * height_ / 10 + minY * width_ / 10;
@@ -731,12 +734,17 @@ void Solver::printGrid() {
   }
 }
 
-// file IO
+// File IO
+
+// PictureFile represents a nonogram puzzle.
 struct PictureFile {
   std::vector<std::vector<int>> rows;
   std::vector<std::vector<int>> cols;
 };
 
+// read a nonogram puzzle from file. The content would be a json
+// object with rows and cols field; each is an array of line segment
+// constraints. See tv.json for an example.
 PictureFile readPictureFile(std::string filename) {
   std::ifstream ifs(filename);
   std::string content(std::istreambuf_iterator<char>{ifs},
