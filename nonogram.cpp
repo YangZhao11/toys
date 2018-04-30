@@ -2,6 +2,7 @@
 #include <iostream>
 #include <memory>
 #include <vector>
+#include "cxxopts.hpp"
 #include "json.hpp"
 
 enum class CellState { EMPTY, SOLID, CROSSED };
@@ -772,15 +773,27 @@ PictureFile readPictureFile(std::string filename) {
 
 // main
 int main(int argc, char *argv[]) {
-  if (argc < 2) {
-    return 1;
+  cxxopts::Options options("nonogram", "nonogram solver");
+  options.add_options()("p,print", "print solved result",
+                        cxxopts::value<bool>())(
+      "f,file", "json files to read",
+      cxxopts::value<std::vector<std::string>>());
+  options.parse_positional({"file"});
+  auto opt = options.parse(argc, argv);
+
+  if (!opt.count("f")) {
+    std::cout << options.help() << std::endl;
+    return 0;
   }
 
-  auto p = readPictureFile(argv[1]);
+  auto &files = opt["f"].as<std::vector<std::string>>();
+  auto p = readPictureFile(files[0]);
 
   Solver s(std::move(p.rows), std::move(p.cols));
   if (s.solve()) {
-    s.printGrid();
+    if (opt["p"].as<bool>()) {
+      s.printGrid();
+    }
   } else {
     std::cout << "failed to find solution";
   }
