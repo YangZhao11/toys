@@ -771,6 +771,18 @@ PictureFile readPictureFile(std::string filename) {
   return p;
 };
 
+std::string RunSolver(std::string filename) {
+  auto p = readPictureFile(files[0]);
+  Solver s(std::move(p.rows), std::move(p.cols));
+  bool solved = s.solve();
+
+  if (s.solve()) {
+    return "solved";
+  } else {
+    return "failed";
+  }
+}
+
 // main
 int main(int argc, char *argv[]) {
   cxxopts::Options options("nonogram", "nonogram solver");
