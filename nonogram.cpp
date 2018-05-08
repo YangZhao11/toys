@@ -151,9 +151,9 @@ class Solver {
   };
 
   struct Stats {
-    int lineCount;
-    int wrongGuesses;
-    int maxDepth;
+    int lineCount = 0;
+    int wrongGuesses = 0;
+    int maxDepth = 0;
   } stats_;
 
  private:
@@ -707,7 +707,6 @@ bool Solver::solve() {
     } else {
       auto g = guess();
       if (g.isEmpty()) {
-        // TODO: report stats
         return true;
       }
       guessed_ = g;
@@ -773,15 +772,18 @@ PictureFile readPictureFile(std::string filename) {
 };
 
 std::string RunSolver(std::string filename) {
-  auto p = readPictureFile(files[0]);
+  auto p = readPictureFile(filename);
   Solver s(std::move(p.rows), std::move(p.cols));
+  std::ostringstream stringStream;
   bool solved = s.solve();
 
-  if (s.solve()) {
-    return "solved";
-  } else {
-    return "failed";
+  stringStream << filename << (solved ? " solved" : " failed");
+  if (solved) {
+    stringStream << " " << s.stats_.lineCount << " " << s.stats_.wrongGuesses
+                 << " " << s.stats_.maxDepth;
   }
+
+  return stringStream.str();
 }
 
 // main
@@ -801,14 +803,17 @@ int main(int argc, char *argv[]) {
 
   auto &files = opt["f"].as<std::vector<std::string>>();
 
-  auto p = readPictureFile(files[0]);
+  TaskQueue q(20);
+  for (auto f : files) {
+    q.Add(std::packaged_task<std::string()>(
+        [f]() -> std::string { return RunSolver(f); }));
+  }
+  q.Close();
 
-  Solver s(std::move(p.rows), std::move(p.cols));
-  if (s.solve()) {
-    if (opt["p"].as<bool>()) {
-      s.printGrid();
-    }
-  } else {
-    std::cout << "failed to find solution";
+  std::string s;
+  bool done;
+  for (std::tie(s, done) = q.GetResult(); !done;
+       std::tie(s, done) = q.GetResult()) {
+    std::cout << s << std::endl;
   }
 }

@@ -7,4 +7,7 @@ task_queue.o: task_queue.cpp task_queue.h
 	g++ -c $< -o $@ $(CPPFLAGS)
 
 task_queue_test: task_queue_test.cpp task_queue.o
-	g++ task_queue_test.cpp task_queue.o -o $@ $(CPPFLAGS)
+	g++ $^ -o $@ $(CPPFLAGS)
+
+nonogram: nonogram.cpp task_queue.o
+	g++ $^ -o $@ $(CPPFLAGS)

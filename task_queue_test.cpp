@@ -23,9 +23,8 @@ int main(int argc, char *argv[]) {
 
   std::string s;
   bool done;
-  std::tie(s, done) = q.GetResult();
-  while (!done) {
+  for (std::tie(s, done) = q.GetResult(); !done;
+       std::tie(s, done) = q.GetResult()) {
     std::cout << s << std::endl;
-    std::tie(s, done) = q.GetResult();
   }
 }
