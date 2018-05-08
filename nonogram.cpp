@@ -4,6 +4,7 @@
 #include <vector>
 #include "cxxopts.hpp"
 #include "json.hpp"
+#include "task_queue.h"
 
 enum class CellState { EMPTY, SOLID, CROSSED };
 
@@ -799,6 +800,7 @@ int main(int argc, char *argv[]) {
   }
 
   auto &files = opt["f"].as<std::vector<std::string>>();
+
   auto p = readPictureFile(files[0]);
 
   Solver s(std::move(p.rows), std::move(p.cols));

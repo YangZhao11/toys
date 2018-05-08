@@ -14,7 +14,8 @@ class TaskQueue {
   std::deque<std::unique_ptr<std::packaged_task<std::string()>>> task_;
   std::deque<std::unique_ptr<std::packaged_task<std::string()>>> worked_task_;
   std::mutex task_mutex_;  // guards the above three
-  std::condition_variable for_get_task_;
+  std::condition_variable has_more_task_;
+  std::condition_variable has_more_worked_task_;
 
   std::packaged_task<std::string()> *GetTask();
   void Worker();
@@ -22,13 +23,14 @@ class TaskQueue {
 
  public:
   explicit TaskQueue(int num_threads);
+  ~TaskQueue();
 
   // For provider
   void Add(std::packaged_task<std::string()> task);
   void Close();
 
   // For consumer
-  std::string GetResult();
+  std::pair<std::string, bool> GetResult();
 };
 
 #endif  // _TASK_QUEUE_H_

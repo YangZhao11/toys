@@ -7,10 +7,17 @@ TaskQueue::TaskQueue(int num_threads) {
   }
 };
 
+TaskQueue::~TaskQueue() {
+  Close();
+  for (auto &t : thread_) {
+    t.join();
+  }
+};
+
 std::packaged_task<std::string()> *TaskQueue::GetTask() {
   std::unique_lock<std::mutex> lock(task_mutex_);
   while (task_.empty() && !closed_) {
-    for_get_task_.wait(lock);
+    has_more_task_.wait(lock);
   }
   if (task_.empty()) {
     lock.unlock();
@@ -21,8 +28,10 @@ std::packaged_task<std::string()> *TaskQueue::GetTask() {
   task_.pop_front();
   auto result = worked_task_.back().get();
   lock.unlock();
+
+  has_more_worked_task_.notify_one();
   return result;
-}
+};
 
 void TaskQueue::Worker() {
   std::packaged_task<std::string()> *task = GetTask();
@@ -40,5 +49,34 @@ void TaskQueue::Add(std::packaged_task<std::string()> task) {
     std::lock_guard<std::mutex> g(task_mutex_);
     task_.emplace_back(std::move(v));
   }
-  for_get_task_.notify_one();
+  has_more_task_.notify_one();
 };
+
+void TaskQueue::Close() {
+  {
+    std::lock_guard<std::mutex> g(task_mutex_);
+    closed_ = true;
+  }
+  has_more_task_.notify_all();
+  has_more_worked_task_.notify_all();
+}
+
+// would return optional<std::string>
+std::pair<std::string, bool> TaskQueue::GetResult() {
+  std::unique_lock<std::mutex> lock(task_mutex_);
+  while (worked_task_.empty() && !(closed_ && task_.empty())) {
+    has_more_worked_task_.wait(lock);
+  }
+  if (worked_task_.empty()) {
+    lock.unlock();
+    return std::make_pair("", true);
+  }
+
+  std::unique_ptr<std::packaged_task<std::string()>> t =
+      std::move(worked_task_.front());
+  worked_task_.pop_front();
+  lock.unlock();
+
+  auto fut = t.get()->get_future();
+  return std::make_pair(fut.get(), false);
+}
