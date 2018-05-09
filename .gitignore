@@ -1,3 +1,4 @@
 *~
 /nonogram
 *.dSYM
+*.o

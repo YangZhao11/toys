@@ -8,7 +8,18 @@
 #include <thread>
 #include <vector>
 
-// task queue
+// TaskQueue implements a task execution interface using threads.
+//
+// Task provider shall add packaged_task<std::string()> to the
+// TaskQueue, then call close after the last task is added. Without
+// Close, the worker threads will wait indefinitely. The packaged
+// tasks are executed in worker threads.
+//
+// The result consumer can call std::tie(str, done) = GetResult()
+// repeatedly, until done is true.
+//
+// All worker threads are waited for before destruction, to make sure
+// all tasks are finished.
 class TaskQueue {
   bool closed_ = false;
   std::deque<std::unique_ptr<std::packaged_task<std::string()>>> task_;

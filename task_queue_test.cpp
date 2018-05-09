@@ -11,6 +11,15 @@ int main(int argc, char *argv[]) {
 
   TaskQueue q(num_threads);
 
+  std::thread writer([&q]() {
+    std::string s;
+    bool done;
+    for (std::tie(s, done) = q.GetResult(); !done;
+         std::tie(s, done) = q.GetResult()) {
+      std::cout << s << std::endl;
+    }
+  });
+
   for (int i = 0; i < 20; i++) {
     q.Add(std::packaged_task<std::string()>([i]() -> std::string {
       std::this_thread::sleep_for(std::chrono::seconds(i));
@@ -21,10 +30,5 @@ int main(int argc, char *argv[]) {
   }
   q.Close();
 
-  std::string s;
-  bool done;
-  for (std::tie(s, done) = q.GetResult(); !done;
-       std::tie(s, done) = q.GetResult()) {
-    std::cout << s << std::endl;
-  }
+  writer.join();
 }
