@@ -37,7 +37,7 @@ class TaskQueue {
   ~TaskQueue();
 
   // For provider
-  void Add(std::packaged_task<std::string()> task);
+  void Add(std::function<std::string()> task);
   void Close();
 
   // For consumer

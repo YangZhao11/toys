@@ -41,9 +41,9 @@ void TaskQueue::Worker() {
   }
 };
 
-void TaskQueue::Add(std::packaged_task<std::string()> task) {
+void TaskQueue::Add(std::function<std::string()> task) {
   std::packaged_task<std::string()> *pt =
-      new std::packaged_task<std::string()>(std::move(task));
+      new std::packaged_task<std::string()>(task);
   std::unique_ptr<std::packaged_task<std::string()>> v(pt);
   {
     std::lock_guard<std::mutex> g(task_mutex_);

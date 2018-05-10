@@ -380,7 +380,8 @@ Solver::Solver(const Solver::Config &config,
     : config_(config),
       width_(cols.size()),
       height_(rows.size()),
-      g_(cols.size() * rows.size()) {
+      g_(cols.size() * rows.size(), CellState::EMPTY),
+      failed_(false) {
   for (int i = 0; i < height_; i++) {
     lines_.push_back(
         std::make_unique<Line>(*this, LineName::Row(i), std::move(rows[i])));
@@ -473,6 +474,41 @@ bool Solver::infer() {
   return true;
 }
 
+std::pair<double, CellState> Solver::Config::GuessScore(const Solver &s, int x,
+                                                        int y) const {
+  CellState val = CellState::SOLID;
+  double score = LineScore(s.getLine(LineName::Row(y)).stats) * rowCoef +
+                 LineScore(s.getLine(LineName::Column(x)).stats) * colCoef;
+  int minX = std::min(x, s.width_ - 1 - x);
+  int minY = std::min(y, s.height_ - 1 - y);
+  if (minX < 5) {
+    score += edgeScore[minX];
+  }
+  if (minY < 5) {
+    score += edgeScore[minY];
+  }
+
+  if (x > 0 && s.get(x - 1, y) == CellState::SOLID) {
+    score += 5;
+    val = CellState::CROSSED;
+  }
+  if (y > 0 && s.get(x, y - 1) == CellState::SOLID) {
+    score += 5;
+    val = CellState::CROSSED;
+  }
+  if (x < s.width_ - 1 && s.get(x + 1, y) == CellState::SOLID) {
+    score += 5;
+    val = CellState::CROSSED;
+  }
+  if (y < s.height_ - 1 && s.get(x, y + 1) == CellState::SOLID) {
+    score += 5;
+    val = CellState::CROSSED;
+  }
+
+  //  return std::make_pair(score, val);
+  return std::make_pair(score, val);
+}
+
 // picks an unwritten cell and make a guess. Returs object like
 // {x,y,val}. Returns empty guess if everything has been filled.
 Solver::Guess Solver::guess() {
@@ -486,33 +522,9 @@ Solver::Guess Solver::guess() {
         continue;
       }
 
-      CellState val = CellState::SOLID;
-      double score = -getLine(LineName::Row(y)).stats.wiggleRoom -
-                     getLine(LineName::Column(x)).stats.wiggleRoom;
-      int minX = std::min(x, width_ - 1 - x);
-      int minY = std::min(y, height_ - 1 - y);
-      score -= minX * height_ / 10 + minY * width_ / 10;
-
-      if (minX == 0 || minY == 0) {
-        score += width_ / 5.0 + height_ / 5.0;
-      }
-
-      if (x > 0 && get(x - 1, y) == CellState::SOLID) {
-        score += 5;
-        val = CellState::CROSSED;
-      }
-      if (y > 0 && get(x, y - 1) == CellState::SOLID) {
-        score += 5;
-        val = CellState::CROSSED;
-      }
-      if (x < width_ - 1 && get(x + 1, y) == CellState::SOLID) {
-        score += 5;
-        val = CellState::CROSSED;
-      }
-      if (y < height_ - 1 && get(x, y + 1) == CellState::SOLID) {
-        score += 5;
-        val = CellState::CROSSED;
-      }
+      CellState val;
+      double score;
+      std::tie(score, val) = config_.GuessScore(*this, x, y);
 
       if (score > maxScore) {
         r.x = x;

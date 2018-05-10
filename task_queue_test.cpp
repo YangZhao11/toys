@@ -21,12 +21,12 @@ int main(int argc, char *argv[]) {
   });
 
   for (int i = 0; i < 20; i++) {
-    q.Add(std::packaged_task<std::string()>([i]() -> std::string {
+    q.Add([i]() -> std::string {
       std::this_thread::sleep_for(std::chrono::seconds(i));
       std::ostringstream stringStream;
       stringStream << "Hello" << i;
       return stringStream.str();
-    }));
+    });
   }
   q.Close();
 

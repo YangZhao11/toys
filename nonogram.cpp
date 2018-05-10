@@ -42,20 +42,21 @@ PictureFile readPictureFile(std::string filename) {
 
 std::string RunSolver(std::string filename) {
   auto p = readPictureFile(filename);
-  Solver::Config config = {.wiggleRoom = -1.0};
+  Solver::Config config = {.wiggleRoom = -1.0,
+                           .numSegments = 0.0,
+                           .doneSegments = 0.0,
+                           .numChanges = 0.0,
+                           .rowCoef = 1.0,
+                           .colCoef = 1.0,
+                           .edgeScore = {20.0, 10.0, 5.0, 2.0, 0.0}};
 
   Solver s(config, std::move(p.rows), std::move(p.cols));
-  std::ostringstream stringStream;
   bool solved = s.solve();
+  std::ostringstream stringStream;
 
   stringStream << filename << (solved ? " solved " : " failed ") << s.width_
-               << " " << s.height_;
-  if (solved) {
-    stringStream << " " << s.stats_.lineCount << " " << s.stats_.wrongGuesses
-                 << " " << s.stats_.maxDepth;
-  } else {
-    stringStream << " NA NA NA";
-  }
+               << " " << s.height_ << " " << s.stats_.lineCount << " "
+               << s.stats_.wrongGuesses << " " << s.stats_.maxDepth;
 
   return stringStream.str();
 }
@@ -78,8 +79,7 @@ int main(int argc, char *argv[]) {
 
   TaskQueue q(20);
   for (auto f : files) {
-    q.Add(std::packaged_task<std::string()>(
-        [f]() -> std::string { return RunSolver(f); }));
+    q.Add([f]() -> std::string { return RunSolver(f); });
   }
   q.Close();
 

@@ -1,5 +1,5 @@
-#include <vector>
 #include <memory>
+#include <vector>
 
 enum class CellState { EMPTY, SOLID, CROSSED };
 
@@ -35,10 +35,10 @@ struct hash<LineName> {
 }  // namespace std
 
 struct LineStats {
-  int wiggleRoom;          // max wiggle for a segment
-  int numSegments;         // number of segment constraints
-  int doneSegments;        // number of segments marked done
-  int numChanges;          // number of changes since last examination
+  int wiggleRoom;    // max wiggle for a segment
+  int numSegments;   // number of segment constraints
+  int doneSegments;  // number of segments marked done
+  int numChanges;    // number of changes since last examination
 };
 
 class Solver;
@@ -132,11 +132,17 @@ class Solver {
     double numChanges;
 
     double LineScore(const LineStats &s) const {
-     return wiggleRoom * s.wiggleRoom +
-       numSegments * s.numSegments +
-       doneSegments * s.doneSegments +
-       numChanges * s.numChanges;
+      return wiggleRoom * s.wiggleRoom + numSegments * s.numSegments +
+             doneSegments * s.doneSegments + numChanges * s.numChanges;
     };
+
+    // for make a guess at X,Y
+    double rowCoef;
+    double colCoef;
+    double edgeScore[5];
+
+    std::pair<double, CellState> GuessScore(const Solver &s, int x,
+                                            int y) const;
   };
   const Config &config_;
 
@@ -176,13 +182,12 @@ class Solver {
   std::vector<State> states_;
 
  public:
-  Solver(const Config &config,
-         std::vector<std::vector<int>> &&rows,
+  Solver(const Config &config, std::vector<std::vector<int>> &&rows,
          std::vector<std::vector<int>> &&cols);
 
   CellState get(int x, int y) const { return g_[x + y * width_]; };
   void set(int x, int y, CellState s);
-  Line &getLine(LineName name) {
+  Line &getLine(LineName name) const {
     int i = name.dir == Direction::ROW ? name.index : name.index + height_;
     return *(lines_[i].get());
   };
