@@ -1,12 +1,13 @@
 #include <memory>
 #include <vector>
+#include "neuronet.hpp"
 
 enum class CellState { EMPTY, SOLID, CROSSED };
 
 enum class Direction { EMPTY, ROW, COLUMN };
 struct LineName {
-  Direction dir;
-  int index;
+  Direction dir = Direction::EMPTY;
+  int index = 0;
 
   // comparison needed for use as key
   bool operator==(const LineName &o) const {
@@ -140,6 +141,7 @@ class Solver {
     double rowCoef;
     double colCoef;
     double edgeScore[5];
+    std::unique_ptr<Net> n;
 
     std::pair<double, CellState> GuessScore(const Solver &s, int x,
                                             int y) const;
@@ -149,8 +151,8 @@ class Solver {
   const int width_;
   const int height_;
   std::vector<CellState> g_;
-  bool failed_;
   LineName lineName_;  // the line we are working on
+  bool failed_ = false;
 
   struct Guess {
     int x;
@@ -162,7 +164,7 @@ class Solver {
       return g;
     };
     bool isEmpty() { return x == -1 && y == -1 && val == CellState::EMPTY; };
-  } guessed_;
+  } guessed_ = Guess::Empty();
 
   struct State {
     std::vector<CellState> g;
@@ -194,6 +196,7 @@ class Solver {
 
   LineName getDirty();
   void markDirty(LineName n);
+  std::vector<double> GridAt(int x, int y) const;
 
   void pushState();
   void popState();

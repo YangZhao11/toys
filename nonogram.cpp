@@ -40,15 +40,11 @@ PictureFile readPictureFile(std::string filename) {
   return p;
 };
 
+// global config object
+static Solver::Config config;
+
 std::string RunSolver(std::string filename) {
   auto p = readPictureFile(filename);
-  Solver::Config config = {.wiggleRoom = -1.0,
-                           .numSegments = 0.0,
-                           .doneSegments = 0.0,
-                           .numChanges = 0.0,
-                           .rowCoef = 1.0,
-                           .colCoef = 1.0,
-                           .edgeScore = {20.0, 10.0, 5.0, 2.0, 0.0}};
 
   Solver s(config, std::move(p.rows), std::move(p.cols));
   bool solved = s.solve();
@@ -63,19 +59,41 @@ std::string RunSolver(std::string filename) {
 
 int main(int argc, char *argv[]) {
   cxxopts::Options options("nonogram", "nonogram solver");
-  options.add_options()("p,print", "print solved result",
-                        cxxopts::value<bool>())(
+  options.add_options()("config", "config json string",
+                        cxxopts::value<std::string>())(
+
+      // "wiggleRoom", "config option",
+      //                         cxxopts::value<double>())(
+      //       "numSegments", "config option", cxxopts::value<double>())(
+      //       "doneSegments", "config option", cxxopts::value<double>())(
+      //       "numChanges", "config option", cxxopts::value<double>())(
+      //       "rowCoef", "config option", cxxopts::value<double>())(
+      //       "colCoef", "config option", cxxopts::value<double>())(
+      //       "edgeScore", "config option",
+      //       cxxopts::value<std::vector<double>>())( "layer1", "config
+      //       option", cxxopts::value<std::vector<double>>())( "layer2",
+      //       "config option", cxxopts::value<std::vector<double>>())(
       "f,file", "json files to read",
       cxxopts::value<std::vector<std::string>>());
   options.parse_positional({"file"});
   auto opt = options.parse(argc, argv);
 
-  if (!opt.count("f")) {
+  if (!opt.count("f") || !opt.count("config")) {
     std::cout << options.help() << std::endl;
     return 0;
   }
 
   auto &files = opt["f"].as<std::vector<std::string>>();
+
+  // {.wiggleRoom = -1.0,
+  //     .numSegments = 0.0,
+  //     .doneSegments = 0.0,
+  //     .numChanges = 0.0,
+  //     .rowCoef = 1.0,
+  //     .colCoef = 1.0,
+  //     .edgeScore = {20.0, 10.0, 5.0, 2.0, 0.0}}
+  auto config_json = nlohmann::json::parse(opt["config"].as<std::string>());
+  config = config_json;
 
   TaskQueue q(20);
   for (auto f : files) {

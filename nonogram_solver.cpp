@@ -380,8 +380,7 @@ Solver::Solver(const Solver::Config &config,
     : config_(config),
       width_(cols.size()),
       height_(rows.size()),
-      g_(cols.size() * rows.size(), CellState::EMPTY),
-      failed_(false) {
+      g_(cols.size() * rows.size(), CellState::EMPTY) {
   for (int i = 0; i < height_; i++) {
     lines_.push_back(
         std::make_unique<Line>(*this, LineName::Row(i), std::move(rows[i])));
@@ -476,7 +475,6 @@ bool Solver::infer() {
 
 std::pair<double, CellState> Solver::Config::GuessScore(const Solver &s, int x,
                                                         int y) const {
-  CellState val = CellState::SOLID;
   double score = LineScore(s.getLine(LineName::Row(y)).stats) * rowCoef +
                  LineScore(s.getLine(LineName::Column(x)).stats) * colCoef;
   int minX = std::min(x, s.width_ - 1 - x);
@@ -488,21 +486,14 @@ std::pair<double, CellState> Solver::Config::GuessScore(const Solver &s, int x,
     score += edgeScore[minY];
   }
 
-  if (x > 0 && s.get(x - 1, y) == CellState::SOLID) {
-    score += 5;
+  std::vector<double> pattern = s.GridAt(x, y);
+  std::vector<double> pattern_score = n->evaluate(pattern);
+  CellState val = CellState::SOLID;
+  if (pattern_score[0] > pattern_score[1]) {
+    score += pattern_score[0];
     val = CellState::CROSSED;
-  }
-  if (y > 0 && s.get(x, y - 1) == CellState::SOLID) {
-    score += 5;
-    val = CellState::CROSSED;
-  }
-  if (x < s.width_ - 1 && s.get(x + 1, y) == CellState::SOLID) {
-    score += 5;
-    val = CellState::CROSSED;
-  }
-  if (y < s.height_ - 1 && s.get(x, y + 1) == CellState::SOLID) {
-    score += 5;
-    val = CellState::CROSSED;
+  } else {
+    score += pattern_score[1];
   }
 
   //  return std::make_pair(score, val);
@@ -536,6 +527,32 @@ Solver::Guess Solver::guess() {
   }
   return r;
 }
+
+// Returns a vector representing the grid around point x,y.
+std::vector<double> Solver::GridAt(int x, int y) const {
+  std::vector<double> g;
+  g.reserve(25);
+  for (int i = x - 2; i <= x + 2; i++) {
+    for (int j = y - 2; j <= y + 2; j++) {
+      if (i < 0 || i >= width_ || j < 0 || j >= height_) {
+        g.push_back(-1);
+        continue;
+      }
+      switch (get(i, j)) {
+        case CellState::SOLID:
+          g.push_back(1);
+          break;
+        case CellState::EMPTY:
+          g.push_back(0);
+          break;
+        case CellState::CROSSED:
+          g.push_back(-1);
+          break;
+      }
+    }
+  }
+  return g;
+};
 
 bool Solver::solve() {
   while (true) {

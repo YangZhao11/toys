@@ -9,5 +9,5 @@ CPPFLAGS=--std=c++14 -Wall
 %_test: %_test.cpp %.o
 	g++ $^ -o $@ $(CPPFLAGS)
 
-nonogram: nonogram.cpp nonogram_solver.o task_queue.o
+nonogram: nonogram.cpp nonogram_solver.o task_queue.o neuronet.o
 	g++ $^ -o $@ $(CPPFLAGS)
