@@ -479,10 +479,10 @@ std::pair<double, CellState> Solver::Config::GuessScore(const Solver &s, int x,
                  LineScore(s.getLine(LineName::Column(x)).stats) * colCoef;
   int minX = std::min(x, s.width_ - 1 - x);
   int minY = std::min(y, s.height_ - 1 - y);
-  if (minX < 5) {
+  if (minX < edgeScoreLen) {
     score += edgeScore[minX];
   }
-  if (minY < 5) {
+  if (minY < edgeScoreLen) {
     score += edgeScore[minY];
   }
 
@@ -531,9 +531,9 @@ Solver::Guess Solver::guess() {
 // Returns a vector representing the grid around point x,y.
 std::vector<double> Solver::GridAt(int x, int y) const {
   std::vector<double> g;
-  g.reserve(25);
-  for (int i = x - 2; i <= x + 2; i++) {
-    for (int j = y - 2; j <= y + 2; j++) {
+  g.reserve(gridSize);
+  for (int i = x - gridHalfEdge; i <= x + gridHalfEdge; i++) {
+    for (int j = y - gridHalfEdge; j <= y + gridHalfEdge; j++) {
       if (i < 0 || i >= width_ || j < 0 || j >= height_) {
         g.push_back(-1);
         continue;

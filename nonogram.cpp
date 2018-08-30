@@ -93,7 +93,21 @@ int main(int argc, char *argv[]) {
   //     .colCoef = 1.0,
   //     .edgeScore = {20.0, 10.0, 5.0, 2.0, 0.0}}
   auto config_json = nlohmann::json::parse(opt["config"].as<std::string>());
-  config = config_json;
+  config.wiggleRoom = config_json["wiggleRoom"];
+  config.numSegments = config_json["numSegments"];
+  config.doneSegments = config_json["doneSegments"];
+  config.numChanges = config_json["numChanges"];
+  config.rowCoef = config_json["rowCoef"];
+  config.colCoef = config_json["colCoef"];
+  std::vector<double> edgeScore = config_json["edgeScore"];
+  if (edgeScore.size() != edgeScoreLen) {
+    return (1);
+  }
+  std::copy(edgeScore.begin(), edgeScore.end(), config.edgeScore);
+
+  std::vector<std::vector<double>> coef = config_json["coef"];
+  Net *net = new Net(coef, gridSize);
+  config.n = std::unique_ptr<Net>(net);
 
   TaskQueue q(20);
   for (auto f : files) {

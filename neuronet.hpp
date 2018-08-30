@@ -18,6 +18,7 @@ class Net {
 
  public:
   Net(std::vector<Layer> &&layers);
+  Net(const std::vector<std::vector<double>> &coefs, int dim_in);
   int dim_in() const { return layers_.front().dim_in(); };
   int dim_out() const { return layers_.back().dim_out(); };
   std::vector<double> evaluate(const std::vector<double> &in) const;

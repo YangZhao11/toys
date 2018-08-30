@@ -123,6 +123,10 @@ class Line {
   void setState(State &&s);
 };
 
+constexpr int edgeScoreLen = 5;  // special treatment of edge
+constexpr int gridHalfEdge = 2;  // neuronet grid size (5x5)
+constexpr int gridSize = (2 * gridHalfEdge + 1) * (2 * gridHalfEdge + 1);
+
 class Solver {
  public:
   struct Config {
@@ -140,7 +144,7 @@ class Solver {
     // for make a guess at X,Y
     double rowCoef;
     double colCoef;
-    double edgeScore[5];
+    double edgeScore[edgeScoreLen];
     std::unique_ptr<Net> n;
 
     std::pair<double, CellState> GuessScore(const Solver &s, int x,
