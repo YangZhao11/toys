@@ -466,7 +466,7 @@ bool Solver::infer() {
     };
     stats_.lineCount++;
     lineName_.dir = Direction::EMPTY;
-    if (failed_) {
+    if (failed_ || stats_.lineCount >= config_.maxLines) {
       return false;
     }
   }

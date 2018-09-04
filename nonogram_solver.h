@@ -149,6 +149,7 @@ class Solver {
 
     std::pair<double, CellState> GuessScore(const Solver &s, int x,
                                             int y) const;
+    int maxLines;  // number of lines to check before failing
   };
   const Config &config_;
 

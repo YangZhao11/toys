@@ -107,7 +107,12 @@ int main(int argc, char *argv[]) {
 
   std::vector<std::vector<double>> coef = config_json["coef"];
   Net *net = new Net(coef, gridSize);
+  if (net->dim_out() != 2) {
+    std::cerr << "config: coef dimensionality error\n";
+    return 1;
+  }
   config.n = std::unique_ptr<Net>(net);
+  config.maxLines = config_json["maxLines"];
 
   TaskQueue q(20);
   for (auto f : files) {
