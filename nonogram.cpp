@@ -61,18 +61,6 @@ int main(int argc, char *argv[]) {
   cxxopts::Options options("nonogram", "nonogram solver");
   options.add_options()("config", "config json string",
                         cxxopts::value<std::string>())(
-
-      // "wiggleRoom", "config option",
-      //                         cxxopts::value<double>())(
-      //       "numSegments", "config option", cxxopts::value<double>())(
-      //       "doneSegments", "config option", cxxopts::value<double>())(
-      //       "numChanges", "config option", cxxopts::value<double>())(
-      //       "rowCoef", "config option", cxxopts::value<double>())(
-      //       "colCoef", "config option", cxxopts::value<double>())(
-      //       "edgeScore", "config option",
-      //       cxxopts::value<std::vector<double>>())( "layer1", "config
-      //       option", cxxopts::value<std::vector<double>>())( "layer2",
-      //       "config option", cxxopts::value<std::vector<double>>())(
       "f,file", "json files to read",
       cxxopts::value<std::vector<std::string>>());
   options.parse_positional({"file"});
@@ -85,13 +73,6 @@ int main(int argc, char *argv[]) {
 
   auto &files = opt["f"].as<std::vector<std::string>>();
 
-  // {.wiggleRoom = -1.0,
-  //     .numSegments = 0.0,
-  //     .doneSegments = 0.0,
-  //     .numChanges = 0.0,
-  //     .rowCoef = 1.0,
-  //     .colCoef = 1.0,
-  //     .edgeScore = {20.0, 10.0, 5.0, 2.0, 0.0}}
   auto config_json = nlohmann::json::parse(opt["config"].as<std::string>());
   config.wiggleRoom = config_json["wiggleRoom"];
   config.numSegments = config_json["numSegments"];
@@ -120,10 +101,9 @@ int main(int argc, char *argv[]) {
   }
   q.Close();
 
-  std::string s;
-  bool done;
-  for (std::tie(s, done) = q.GetResult(); !done;
-       std::tie(s, done) = q.GetResult()) {
-    std::cout << s << std::endl;
+  std::optional<std::string> s;
+  for (s = q.GetResult(); s;
+       s = q.GetResult()) {
+    std::cout << s.value() << std::endl;
   }
 }

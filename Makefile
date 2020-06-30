@@ -1,4 +1,4 @@
-CPPFLAGS=--std=c++14 -Wall
+CPPFLAGS=--std=c++17 -Wall
 
 % : %.cpp
 	g++ $< -o $@ $(CPPFLAGS)

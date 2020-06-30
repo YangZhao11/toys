@@ -61,15 +61,14 @@ void TaskQueue::Close() {
   has_more_worked_task_.notify_all();
 }
 
-// would return optional<std::string>
-std::pair<std::string, bool> TaskQueue::GetResult() {
+std::optional<std::string> TaskQueue::GetResult() {
   std::unique_lock<std::mutex> lock(task_mutex_);
   while (worked_task_.empty() && !(closed_ && task_.empty())) {
     has_more_worked_task_.wait(lock);
   }
   if (worked_task_.empty()) {
     lock.unlock();
-    return std::make_pair("", true);
+    return std::nullopt;
   }
 
   std::unique_ptr<std::packaged_task<std::string()>> t =
@@ -78,5 +77,5 @@ std::pair<std::string, bool> TaskQueue::GetResult() {
   lock.unlock();
 
   auto fut = t.get()->get_future();
-  return std::make_pair(fut.get(), false);
+  return fut.get();
 }

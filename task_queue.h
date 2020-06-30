@@ -7,6 +7,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <optional>
 
 // TaskQueue implements a task execution interface using threads.
 //
@@ -15,8 +16,8 @@
 // Close, the worker threads will wait indefinitely. The packaged
 // tasks are executed in worker threads.
 //
-// The result consumer can call std::tie(str, done) = GetResult()
-// repeatedly, until done is true.
+// The result consumer can call str = GetResult()
+// repeatedly, until str does not contain value.
 //
 // All worker threads are waited for before destruction, to make sure
 // all tasks are finished.
@@ -41,7 +42,7 @@ class TaskQueue {
   void Close();
 
   // For consumer
-  std::pair<std::string, bool> GetResult();
+  std::optional<std::string> GetResult();
 };
 
 #endif  // _TASK_QUEUE_H_
